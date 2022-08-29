@@ -44,7 +44,7 @@ func main() {
 		todoGauge.WithLabelValues("done").Set(float64(done))
 		todoGauge.WithLabelValues("notdone").Set(float64(total - done))
 
-		time.Sleep(1 * time.Second)
+		time.Sleep(10 * time.Second)
 	}
 }
 
