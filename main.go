@@ -1,85 +1,106 @@
 package main
 
-import(
-  "fmt"
-  "os"
-  "time"
-  "bufio"
-  "strings"
+import (
+	"bufio"
+	"fmt"
+	"net/http"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+)
+
+var (
+	todoGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "xtodo_todos",
+		Help: "Todo items in xTodo",
+	}, []string{"status"})
 )
 
 func getTodoDir() string {
-  todoDir := os.Getenv("TODO_HOME")
-  if todoDir != "" {
-    return todoDir
-  }
+	todoDir := os.Getenv("TODO_HOME")
+	if todoDir != "" {
+		return todoDir
+	}
 
-  homeDir, _ := os.UserHomeDir()
-  return homeDir + "/workspace/todos"
+	homeDir, _ := os.UserHomeDir()
+	return homeDir + "/workspace/todos"
 }
 
 func main() {
-  for {
-    done, total := getTodoCount()
-    fmt.Println(done, total)
+	prometheus.MustRegister(todoGauge)
 
-    time.Sleep(1* time.Second)
-  }
+	go func() {
+		http.Handle("/metrics", promhttp.Handler())
+		panic(http.ListenAndServe(":18080", nil))
+	}()
+
+	for {
+		done, total := getTodoCount()
+		fmt.Println(done, total)
+
+		todoGauge.WithLabelValues("done").Set(float64(done))
+		todoGauge.WithLabelValues("notdone").Set(float64(total - done))
+
+		time.Sleep(1 * time.Second)
+	}
 }
 
 func getTodoCount() (int, int) {
-  todoDir := getTodoDir()
+	todoDir := getTodoDir()
 
-  fmt.Println("opening todos from :", todoDir)
+	fmt.Println("opening todos from :", todoDir)
 
-  now := time.Now().Local()
-  month := now.Month().String()[:3]
-  year := now.Local().Year()
-  day := now.Day()
+	now := time.Now().Local()
+	month := now.Month().String()[:3]
+	year := now.Local().Year()
+	day := now.Day()
 
-  file := fmt.Sprintf("%s/data/%d%s/README.md", todoDir, year, month)
+	file := fmt.Sprintf("%s/data/%d%s/README.md", todoDir, year, month)
 
-  fmt.Println("opening file : ", file)
+	fmt.Println("opening file : ", file)
 
-  f, err := os.Open(file)
-  if err != nil {
-    fmt.Println("unable to open file", err)
-    return 0, 0
-  }
-  defer f.Close()
+	f, err := os.Open(file)
+	if err != nil {
+		fmt.Println("unable to open file", err)
+		return 0, 0
+	}
+	defer f.Close()
 
-  scanner := bufio.NewScanner(f)
+	scanner := bufio.NewScanner(f)
 
-  inside := false
-  items := []string{}
+	inside := false
+	items := []string{}
 
-  prefix := fmt.Sprintf("## %s %02d", month, day)
-  fmt.Println("today: ", prefix)
+	prefix := fmt.Sprintf("## %s %02d", month, day)
+	fmt.Println("today: ", prefix)
 
-  for scanner.Scan() {
-    line := scanner.Text()
+	for scanner.Scan() {
+		line := scanner.Text()
 
-    if inside && (line=="" || line[0] == '#') {
-      break
-    }
+		if inside && (line == "" || line[0] == '#') {
+			break
+		}
 
-    if inside {
-      items = append(items, line)
-    }else if strings.HasPrefix(line, prefix) {
-      inside = true
-    }
-  }
+		if inside {
+			items = append(items, line)
+		} else if strings.HasPrefix(line, prefix) {
+			inside = true
+		}
+	}
 
-  if err := scanner.Err(); err != nil {
-    fmt.Println(err)
-  }
+	if err := scanner.Err(); err != nil {
+		fmt.Println(err)
+	}
 
-  total := len(items)
-  done := 0
-  for _, item := range items {
-    if strings.HasPrefix(item, "- [x]") {
-      done++
-    }
-  }
-  return done, total
+	total := len(items)
+	done := 0
+	for _, item := range items {
+		if strings.HasPrefix(item, "- [x]") {
+			done++
+		}
+	}
+	return done, total
 }
