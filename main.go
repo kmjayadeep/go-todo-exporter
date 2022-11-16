@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os/exec"
@@ -10,11 +11,16 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
+type Task struct {
+	Folder string `json:"folder"`
+	Status string `json:"status"`
+}
+
 var (
 	todoGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "taskwarrior_todos",
 		Help: "Todo items in taskwarrior",
-	}, []string{"status"})
+	}, []string{"folder", "status"})
 )
 
 func main() {
@@ -26,40 +32,34 @@ func main() {
 	}()
 
 	for {
-		done, total := getTodoCount()
-		fmt.Println(done, total)
+		todos, err := getTasks()
+		if err != nil {
+			fmt.Println("unable to get tasks", err)
+			time.Sleep(10 * time.Second)
+			continue
+		}
+		fmt.Printf("got todos : %d\n", len(todos))
 
-		todoGauge.WithLabelValues("done").Set(float64(done))
-		todoGauge.WithLabelValues("pending").Set(float64(total - done))
+		countMap := make(map[Task]int)
+		for _, todo := range todos {
+			countMap[todo] += 1
+		}
+
+		for todo, count := range countMap {
+			todoGauge.WithLabelValues(todo.Folder, todo.Status).Set(float64(count))
+		}
 
 		time.Sleep(10 * time.Second)
 	}
 }
 
-func getTodoCount() (int, int) {
-	var done, pending int
-
-	cmd := exec.Command("task", "status:completed", "count")
-	out1, err := cmd.Output()
+func getTasks() ([]Task, error) {
+	cmd := exec.Command("task", "export")
+	out, err := cmd.Output()
 	if err != nil {
-		fmt.Println(err.Error())
-		return 0, 0
+		return nil, err
 	}
-	if _, err := fmt.Sscanf(string(out1), "%d", &done); err != nil {
-		fmt.Println(err.Error())
-		return 0, 0
-	}
-
-	cmd = exec.Command("task", "status:pending", "count")
-	out2, err := cmd.Output()
-	if err != nil {
-		fmt.Println(err.Error())
-		return 0, 0
-	}
-	if _, err := fmt.Sscanf(string(out2), "%d", &pending); err != nil {
-		fmt.Println(err.Error())
-		return 0, 0
-	}
-
-	return done, pending + done
+	tasks := []Task{}
+	err = json.Unmarshal(out, &tasks)
+	return tasks, err
 }
