@@ -13,3 +13,7 @@ labels:
 status: done
 status: pending
 ```
+
+# Nix flake
+
+This package can be installed in nixos using flakes
