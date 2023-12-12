@@ -1,5 +1,5 @@
 {
-  description = "Go example flake for Zero to Nix";
+  description = "Go Todo Exporter";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
