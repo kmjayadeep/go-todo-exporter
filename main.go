@@ -12,7 +12,7 @@ import (
 )
 
 type Task struct {
-	Folder string `json:"folder"`
+	Project string `json:"project"`
 	Status string `json:"status"`
 }
 
@@ -20,7 +20,7 @@ var (
 	todoGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Name: "taskwarrior_todos",
 		Help: "Todo items in taskwarrior",
-	}, []string{"folder", "status"})
+	}, []string{"project", "status"})
 )
 
 func main() {
@@ -28,7 +28,7 @@ func main() {
 
 	go func() {
 		http.Handle("/metrics", promhttp.Handler())
-		panic(http.ListenAndServe(":18080", nil))
+		panic(http.ListenAndServe(":28080", nil))
 	}()
 
 	for {
@@ -46,7 +46,7 @@ func main() {
 		}
 
 		for todo, count := range countMap {
-			todoGauge.WithLabelValues(todo.Folder, todo.Status).Set(float64(count))
+			todoGauge.WithLabelValues(todo.Project, todo.Status).Set(float64(count))
 		}
 
 		time.Sleep(10 * time.Second)
