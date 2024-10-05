@@ -28,7 +28,7 @@ func main() {
 
 	go func() {
 		http.Handle("/metrics", promhttp.Handler())
-		panic(http.ListenAndServe(":28080", nil))
+		panic(http.ListenAndServe(":18080", nil))
 	}()
 
 	for {
